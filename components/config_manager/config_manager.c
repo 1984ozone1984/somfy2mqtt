@@ -72,6 +72,13 @@ void config_manager_init(void)
     load_u32(nvs, "pub_ivl",     &g_config.pub_interval);
     tx_gpio_set = load_u8(nvs, "tx_gpio", &g_config.tx_gpio);
 
+    {
+        uint8_t val;
+        if (load_u8(nvs, "cover_dn", &val)) {
+            g_config.cover_open_sends_down = (val != 0);
+        }
+    }
+
 
     nvs_close(nvs);
 
@@ -178,6 +185,23 @@ esp_err_t config_manager_save_somfy(uint32_t remote_addr, uint8_t tx_gpio,
         g_config.pub_interval       = pub_interval;
         ESP_LOGI(TAG, "somfy config saved: remote=0x%06lX tx_gpio=%u pub=%lus",
                  (unsigned long)remote_addr, tx_gpio, (unsigned long)pub_interval);
+    }
+    return err;
+}
+
+esp_err_t config_manager_save_cover(bool open_sends_down)
+{
+    nvs_handle_t nvs;
+    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &nvs);
+    if (err != ESP_OK) return err;
+
+    nvs_set_u8(nvs, "cover_dn", open_sends_down ? 1 : 0);
+    err = nvs_commit(nvs);
+    nvs_close(nvs);
+
+    if (err == ESP_OK) {
+        g_config.cover_open_sends_down = open_sends_down;
+        ESP_LOGI(TAG, "cover: OPEN sends %s", open_sends_down ? "DOWN" : "UP");
     }
     return err;
 }

@@ -53,11 +53,15 @@ static void handle_command_payload(const char *payload)
 
 static void handle_cover_payload(const char *payload)
 {
-    /* device_class "shutter": open = rolled up, so OPEN is the UP button. */
+    /* Direction is installation-specific — see the cover setting on /config. */
+    bool down_opens = g_config.cover_open_sends_down;
+
     if (strcmp(payload, "OPEN") == 0) {
-        somfy_enqueue_command(SOMFY_BTN_UP, "up");
+        somfy_enqueue_command(down_opens ? SOMFY_BTN_DOWN : SOMFY_BTN_UP,
+                              down_opens ? "down" : "up");
     } else if (strcmp(payload, "CLOSE") == 0) {
-        somfy_enqueue_command(SOMFY_BTN_DOWN, "down");
+        somfy_enqueue_command(down_opens ? SOMFY_BTN_UP : SOMFY_BTN_DOWN,
+                              down_opens ? "up" : "down");
     } else if (strcmp(payload, "STOP") == 0) {
         somfy_enqueue_command(SOMFY_BTN_STOP, "stop");
     } else {

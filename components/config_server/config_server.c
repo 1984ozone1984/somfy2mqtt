@@ -183,13 +183,14 @@ static esp_err_t root_get(httpd_req_t *req)
         "<tr><th>Last paired with</th><td>%s</td></tr>"
         "<tr><th>Next rolling code</th><td><span class=big>%lu</span></td></tr>"
         "<tr><th>Transmitter GPIO</th><td>%u</td></tr>"
-        "<tr><th>HA cover</th><td>Shutter &mdash; OPEN sends UP</td></tr>"
+        "<tr><th>HA cover</th><td>Shutter &mdash; OPEN sends %s</td></tr>"
         "</table></div>",
         /* From the transmitter, not the config, so it is what actually goes out */
         (unsigned long)somfy_rts_get_remote_addr(),
         paired,
         (unsigned long)somfy_rts_get_rolling_code(),
-        g_config.tx_gpio);
+        g_config.tx_gpio,
+        g_config.cover_open_sends_down ? "DOWN" : "UP");
 
     n += snprintf(buf + n, 4096 - n,
         "<div class=box><h2>Network</h2><table>"
@@ -211,14 +212,14 @@ static esp_err_t root_get(httpd_req_t *req)
     n += snprintf(buf + n, 4096 - n,
         "<div class=box><h2>Device</h2><table>"
         "<tr><th>Hostname</th><td>%s.local</td></tr>"
-        "<tr><th>Firmware</th><td>%s (%s)</td></tr>"
+        "<tr><th>Firmware</th><td>%s<br><span class=hint>built %s %s</span></td></tr>"
         "<tr><th>Uptime</th><td>%lud %02luh %02lum %02lus</td></tr>"
         "<tr><th>Free heap</th><td>%u B</td></tr>"
         "<tr><th>Free heap minimum</th><td>%u B</td></tr>"
         "</table></div>"
         "</div>",
         g_config.hostname,
-        app->version, app->date,
+        app->version, app->date, app->time,
         (unsigned long)(uptime_s / 86400),
         (unsigned long)((uptime_s % 86400) / 3600),
         (unsigned long)((uptime_s % 3600) / 60),
@@ -413,6 +414,20 @@ static esp_err_t config_get(httpd_req_t *req)
         "</form></div>"
 
 
+        "<div class=box><h2>Home Assistant Cover</h2>"
+        "<form method=POST action=/config/cover>"
+        "<label>Which direction OPEN sends</label>"
+        "<select name=open_dn>"
+        "<option value=0%s>OPEN sends UP &mdash; open = retracted</option>"
+        "<option value=1%s>OPEN sends DOWN &mdash; open = extended</option>"
+        "</select>"
+        "<p class=hint>The entity is always a <code>shutter</code>, so it keeps "
+        "the window-shutter icons either way; this only picks which way the "
+        "motor runs for OPEN. Affects the <b>cover</b> entity only &mdash; the "
+        "Up/Down buttons always send their own direction.</p>"
+        "<button type=submit>Save Cover Direction</button>"
+        "</form></div>"
+
         "<div class=box style='border-left:4px solid #e8a000'>"
         "<h2>Rolling code</h2>"
         "<form method=POST action=/config/rolling>"
@@ -440,6 +455,8 @@ static esp_err_t config_get(httpd_req_t *req)
         (unsigned long)somfy_rts_get_remote_addr(),
         g_config.tx_gpio,
         (unsigned long)g_config.pub_interval,
+        g_config.cover_open_sends_down ? "" : " selected",
+        g_config.cover_open_sends_down ? " selected" : "",
         (unsigned long)somfy_rts_get_rolling_code());
 
     httpd_resp_set_type(req, "text/html");
@@ -568,6 +585,28 @@ static esp_err_t config_rolling_post(httpd_req_t *req)
     config_manager_save_rolling_code((uint32_t)code);
     ESP_LOGW(TAG, "rolling code manually set to %ld", code);
     return send_ok(req, "Rolling code updated", "/config");
+}
+
+static esp_err_t config_cover_post(httpd_req_t *req)
+{
+    char body[64];
+    read_body(req, body, sizeof(body));
+
+    char s_dn[8] = {0};
+    get_field(body, "open_dn", s_dn, sizeof(s_dn));
+    if (s_dn[0] == '\0') return send_ok(req, "No value given", "/config");
+
+    bool open_dn = (atoi(s_dn) != 0);
+    if (config_manager_save_cover(open_dn) != ESP_OK) {
+        return send_ok(req, "Save failed — setting unchanged", "/config");
+    }
+
+    /* The discovery payload does not depend on this — device_class stays
+     * "shutter" either way — so there is nothing to republish. The retained
+     * cover state now means the opposite of what it did; the next Up or Down
+     * corrects it, and there is nothing to read back that could do it sooner. */
+    return send_ok(req, open_dn ? "Saved — OPEN now sends DOWN"
+                                : "Saved — OPEN now sends UP", "/config");
 }
 
 /* ── GET /ota ─────────────────────────────────────────────────────────────── */
@@ -782,6 +821,7 @@ esp_err_t config_server_start(void)
         { .uri = "/config/wifi",     .method = HTTP_POST, .handler = config_wifi_post     },
         { .uri = "/config/mqtt",     .method = HTTP_POST, .handler = config_mqtt_post     },
         { .uri = "/config/somfy",    .method = HTTP_POST, .handler = config_somfy_post    },
+        { .uri = "/config/cover",    .method = HTTP_POST, .handler = config_cover_post    },
         { .uri = "/config/rolling",  .method = HTTP_POST, .handler = config_rolling_post  },
         { .uri = "/reboot",          .method = HTTP_POST, .handler = reboot_post          },
         { .uri = "/ota",             .method = HTTP_GET,  .handler = ota_get              },

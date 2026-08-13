@@ -107,9 +107,19 @@ change it there if you want a different tree.
 
 ### About the cover entity
 
-The cover is published as `device_class: shutter`: `OPEN` sends UP and reports
-`open` when retracted, matching the `mdi:window-shutter-open` /
-`mdi:window-shutter` icon pair Home Assistant supplies for that class.
+The cover is published as `device_class: shutter`, which is what gets you the
+`mdi:window-shutter-open` / `mdi:window-shutter` icon pair Home Assistant
+supplies for that class.
+
+Which physical direction `OPEN` triggers is installation-specific, so it is a
+setting — **Home Assistant Cover** on the Settings page:
+
+| Setting | OPEN sends | Reports `open` when |
+|---------|-----------|---------------------|
+| OPEN sends UP (default) | UP | retracted |
+| OPEN sends DOWN | DOWN | extended |
+
+The device class is `shutter` either way, so the icons do not change with it.
 
 The discovery payload deliberately carries **no `icon` field**. An explicit icon
 overrides Home Assistant's state-dependent default and freezes it, so leaving it

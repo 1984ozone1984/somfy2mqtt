@@ -27,6 +27,14 @@ typedef struct {
     uint32_t paired_addr;
 
     uint32_t pub_interval;      /* diagnostics publish interval (seconds)           */
+
+    /* Which physical direction Home Assistant's OPEN maps to. The entity is
+     * always device_class "shutter"; only the direction varies by installation.
+     *   false → OPEN sends UP   (open = rolled up / retracted)   [default]
+     *   true  → OPEN sends DOWN (open = rolled out / deployed)
+     * Stored under its own NVS key so it cannot inherit a value written by the
+     * old awning/shutter setting this replaced. */
+    bool     cover_open_sends_down;
 } somfy_config_t;
 
 extern somfy_config_t g_config;
@@ -37,6 +45,9 @@ esp_err_t config_manager_save_wifi(const char *ssid, const char *pass);
 esp_err_t config_manager_save_mqtt(const char *url, const char *user, const char *pass);
 esp_err_t config_manager_save_somfy(uint32_t remote_addr, uint8_t tx_gpio,
                                     uint32_t pub_interval);
+
+/** Which direction Home Assistant's OPEN command sends. */
+esp_err_t config_manager_save_cover(bool open_sends_down);
 
 /**
  * Persist the rolling code. Called before every transmission, so this is the

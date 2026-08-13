@@ -84,7 +84,9 @@ static void somfy_task(void *arg)
          * handler so pressing the plain Up/Down buttons moves it too. STOP and
          * PROG leave the state alone: neither implies a final position. */
         if (cmd.button == SOMFY_BTN_UP || cmd.button == SOMFY_BTN_DOWN) {
-            bool is_open = (cmd.button == SOMFY_BTN_UP);   /* shutter: up = open */
+            bool is_open = g_config.cover_open_sends_down
+                           ? (cmd.button == SOMFY_BTN_DOWN)
+                           : (cmd.button == SOMFY_BTN_UP);
             mqtt_publish(T_COVER_STATE, is_open ? "open" : "closed", 1, 1);
         }
 
