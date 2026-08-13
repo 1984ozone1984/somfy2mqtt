@@ -337,10 +337,13 @@ static esp_err_t control_rc_get(httpd_req_t *req)
 
 static esp_err_t config_get(httpd_req_t *req)
 {
-    char *buf = malloc(5120);
+    /* CSS ~1.6 kB + five forms with their hint paragraphs */
+    enum { CONFIG_PAGE_SZ = 8192 };
+
+    char *buf = malloc(CONFIG_PAGE_SZ);
     if (!buf) { httpd_resp_send_500(req); return ESP_FAIL; }
 
-    snprintf(buf, 5120,
+    snprintf(buf, CONFIG_PAGE_SZ,
         "<!DOCTYPE html><html><head><meta charset=UTF-8>"
         "<meta name=viewport content='width=device-width,initial-scale=1'>"
         "<title>Markise Settings</title><style>%s</style></head><body>"
@@ -392,6 +395,11 @@ static esp_err_t config_get(httpd_req_t *req)
         "<option value=1%s>extends the awning (sends DOWN)</option>"
         "<option value=0%s>retracts the awning (sends UP)</option>"
         "</select>"
+        "<p class=hint>Affects the <b>cover</b> entity only &mdash; the Up/Down "
+        "buttons always send their own direction. Home Assistant treats an "
+        "awning as <i>open when deployed</i>, so with the default setting the "
+        "cover card's &#9650; arrow extends the awning and it reports "
+        "<code>open</code> while shading.</p>"
         "<p class=hint>The transmitter GPIO takes effect after a reboot.</p>"
         "<button type=submit>Save Somfy Settings</button>"
         "</form></div>"

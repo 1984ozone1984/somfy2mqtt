@@ -104,9 +104,21 @@ the receiver's expectation.
 The topic base is fixed in `components/config_manager/include/somfy_topics.h` —
 change it there if you want a different tree.
 
-On the cover entity: Home Assistant's `awning` device class treats *open* as
-**deployed**, so `OPEN` sends the remote's DOWN button by default. If your motor
-runs the other way, flip **Cover OPEN command** on the Settings page.
+### About the cover entity
+
+Home Assistant's `awning` device class treats *open* as **deployed**, so `OPEN`
+sends the remote's DOWN button by default. The practical consequence is that on
+the cover card the **▲ arrow extends the awning** and it reports `open` while
+it is shading. That looks backwards but is the semantics automations and the
+awning icon expect.
+
+**Cover OPEN command** on the Settings page flips the mapping if your motor runs
+the other way round — but note that flipping it purely to make the arrows match
+the physical direction will also make Home Assistant report a deployed awning as
+`closed`, which inverts every state check.
+
+The setting affects the cover entity only. The Up/Down/Stop/Prog button entities
+always send their own direction regardless.
 
 ## Architecture
 
