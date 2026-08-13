@@ -230,6 +230,14 @@ esp_err_t somfy_rts_send(uint8_t button)
             ESP_LOGE(TAG, "transmit failed: %s", esp_err_to_name(err));
         } else {
             ESP_LOGI(TAG, "sent button 0x%X in %u symbols", button, (unsigned)e.count);
+
+            /* Remember which address the blind was told to learn. Nothing comes
+             * back over RTS, so this record of what we sent is the only way to
+             * tell later whether the configured address still matches the one
+             * the blind is actually paired to. */
+            if (button == SOMFY_BTN_PROG) {
+                config_manager_save_paired_addr(s_remote);
+            }
         }
     }
 

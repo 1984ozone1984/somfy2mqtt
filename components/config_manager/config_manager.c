@@ -68,6 +68,7 @@ void config_manager_init(void)
 
     load_u32(nvs, "remote_addr", &g_config.remote_addr);
     load_u32(nvs, "rolling",     &g_config.rolling_code);
+    load_u32(nvs, "paired",      &g_config.paired_addr);
     load_u32(nvs, "pub_ivl",     &g_config.pub_interval);
     tx_gpio_set = load_u8(nvs, "tx_gpio", &g_config.tx_gpio);
 
@@ -192,6 +193,23 @@ esp_err_t config_manager_save_somfy(uint32_t remote_addr, uint8_t tx_gpio,
         g_config.cover_open_extends = cover_open_extends;
         ESP_LOGI(TAG, "somfy config saved: remote=0x%06lX tx_gpio=%u pub=%lus",
                  (unsigned long)remote_addr, tx_gpio, (unsigned long)pub_interval);
+    }
+    return err;
+}
+
+esp_err_t config_manager_save_paired_addr(uint32_t addr)
+{
+    nvs_handle_t nvs;
+    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &nvs);
+    if (err != ESP_OK) return err;
+
+    nvs_set_u32(nvs, "paired", addr);
+    err = nvs_commit(nvs);
+    nvs_close(nvs);
+
+    if (err == ESP_OK) {
+        g_config.paired_addr = addr;
+        ESP_LOGI(TAG, "paired address recorded: 0x%06lX", (unsigned long)addr);
     }
     return err;
 }

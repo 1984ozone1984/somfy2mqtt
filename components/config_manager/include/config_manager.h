@@ -21,6 +21,11 @@ typedef struct {
     uint32_t rolling_code;      /* incremented and persisted before every frame     */
     uint8_t  tx_gpio;           /* 433.42 MHz transmitter data pin, default 15      */
 
+    /* Address that was transmitted the last time a PROG frame went out, i.e. the
+     * address the blind was told to learn. 0 = never paired from this device.
+     * RTS is transmit-only, so this is what we sent, not something read back. */
+    uint32_t paired_addr;
+
     uint32_t pub_interval;      /* diagnostics publish interval (seconds)           */
 
     /* Cover semantics. Picks a coherent pair of device_class and button mapping:
@@ -46,3 +51,6 @@ esp_err_t config_manager_save_somfy(uint32_t remote_addr, uint8_t tx_gpio,
  * do not call it from anywhere that runs on a timer.
  */
 esp_err_t config_manager_save_rolling_code(uint32_t code);
+
+/** Record the address just used for a PROG transmission. */
+esp_err_t config_manager_save_paired_addr(uint32_t addr);

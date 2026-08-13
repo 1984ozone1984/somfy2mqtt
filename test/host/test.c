@@ -25,6 +25,12 @@ esp_err_t config_manager_save_rolling_code(uint32_t code)
     return ESP_OK;
 }
 
+esp_err_t config_manager_save_paired_addr(uint32_t addr)
+{
+    g_config.paired_addr = addr;
+    return ESP_OK;
+}
+
 static rmt_symbol_word_t captured[512];
 static size_t captured_n;
 
@@ -206,6 +212,24 @@ static void test_button(uint8_t button, const char *name)
     check(total > 495000 && total < 510000, "airtime in the expected ~503 ms range");
 }
 
+/* Only PROG marks the blind as paired — a stray UP must not overwrite the
+ * record of which address the blind was actually taught. */
+static void test_paired_addr_recording(void)
+{
+    printf("\n== paired address recording ==\n");
+
+    g_config.paired_addr = 0;
+
+    somfy_rts_send(SOMFY_BTN_UP);
+    check(g_config.paired_addr == 0, "UP does not record a paired address");
+
+    somfy_rts_send(SOMFY_BTN_STOP);
+    check(g_config.paired_addr == 0, "STOP does not record a paired address");
+
+    somfy_rts_send(SOMFY_BTN_PROG);
+    check(g_config.paired_addr == 0x121309, "PROG records the transmitted address");
+}
+
 static void test_frame_bytes(void)
 {
     printf("\n== frame integrity ==\n");
@@ -236,6 +260,7 @@ int main(void)
     test_button(SOMFY_BTN_DOWN, "DOWN");
     test_button(SOMFY_BTN_STOP, "STOP");
     test_button(SOMFY_BTN_PROG, "PROG");
+    test_paired_addr_recording();
     test_frame_bytes();
 
     printf("\n%s (%d failures)\n", failures ? "FAILED" : "ALL PASSED", failures);

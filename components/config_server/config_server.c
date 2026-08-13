@@ -160,17 +160,33 @@ static esp_err_t root_get(httpd_req_t *req)
         NAV,
         CSS);
 
+    /* What the blind was last told to learn, versus what we transmit now. They
+     * only diverge if the address was changed after pairing. */
+    char paired[96];
+    if (g_config.paired_addr == 0) {
+        snprintf(paired, sizeof(paired),
+                 "<span class=warn>never paired from this device</span>");
+    } else if (g_config.paired_addr == somfy_rts_get_remote_addr()) {
+        snprintf(paired, sizeof(paired), "0x%06lX <span class=ok>&#10003;</span>",
+                 (unsigned long)g_config.paired_addr);
+    } else {
+        snprintf(paired, sizeof(paired),
+                 "<span class=err>0x%06lX &mdash; differs, re-pair</span>",
+                 (unsigned long)g_config.paired_addr);
+    }
+
     n += snprintf(buf + n, 4096 - n,
         "<div class=grid>"
         "<div class=box><h2>Somfy RTS</h2><table>"
-        "<tr><th>Remote address</th><td>0x%06lX</td></tr>"
+        "<tr><th>Remote address (transmitting)</th><td>0x%06lX</td></tr>"
+        "<tr><th>Last paired with</th><td>%s</td></tr>"
         "<tr><th>Next rolling code</th><td><span class=big>%lu</span></td></tr>"
         "<tr><th>Transmitter GPIO</th><td>%u</td></tr>"
         "<tr><th>Cover type</th><td>%s</td></tr>"
         "</table></div>",
-        /* From the transmitter, not the config: this is the address the blind
-         * was actually paired against. */
+        /* From the transmitter, not the config, so it is what actually goes out */
         (unsigned long)somfy_rts_get_remote_addr(),
+        paired,
         (unsigned long)somfy_rts_get_rolling_code(),
         g_config.tx_gpio,
         g_config.cover_open_extends ? "Awning — OPEN extends (DOWN)"
@@ -386,7 +402,9 @@ static esp_err_t config_get(httpd_req_t *req)
         "<input type=text name=remote value='%06lX' maxlength=8>"
         "<p class=hint>Six hex digits, with or without a leading <code>0x</code>. "
         "Takes effect immediately &mdash; the blind will ignore the device until "
-        "you pair it again from the Control page. Default 121309.</p>"
+        "you pair it again from the Control page. Default 121309. The blind "
+        "learns whatever address is transmitted; nothing is read back from it, "
+        "so the Status page shows the address last sent with PROG for comparison.</p>"
         "<label>Transmitter GPIO</label>"
         "<input type=number name=tx_gpio value='%u' min=0 max=33>"
         "<label>Diagnostics publish interval (s)</label>"
