@@ -12,10 +12,17 @@ CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0=n
 
 # MQTT: drop publishes while offline instead of growing the outbox
 CONFIG_MQTT_SKIP_PUBLISH_IF_DISCONNECTED=y
-# HA discovery payloads are ~700 B — the 1 kB default leaves no headroom
-CONFIG_MQTT_BUFFER_SIZE=2048
+# Not setting CONFIG_MQTT_BUFFER_SIZE: it is gated behind MQTT_USE_CUSTOM_CONFIG
+# and is silently ignored without it. The 1 kB default is fine — the largest
+# discovery message is 521 B (payload + topic); see test/host measurement.
 
 # OTA pulled from a plain HTTP URL (local web server / HA)
 CONFIG_ESP_HTTPS_OTA_ALLOW_HTTP=y
+
+# Form POSTs from the control page carry Origin + Referer + Content-Type on top
+# of Chrome's sec-ch-ua client hints, which overruns the 512 B default and makes
+# the server answer 431 "Header fields are too long". This is a single scratch
+# buffer for the whole server, so the extra 1.5 kB is paid once.
+CONFIG_HTTPD_MAX_REQ_HDR_LEN=2048
 
 CONFIG_LOG_DEFAULT_LEVEL_INFO=y
