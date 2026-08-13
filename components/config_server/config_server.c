@@ -7,6 +7,7 @@
 #include "config_manager.h"
 #include "wifi_manager.h"
 #include "mqtt_manager.h"
+#include "ha_discovery.h"
 #include "somfy_rts.h"
 #include "esp_http_server.h"
 #include "esp_log.h"
@@ -546,6 +547,8 @@ static esp_err_t config_somfy_post(httpd_req_t *req)
     uint32_t pub    = s_pub[0]  ? (uint32_t)atoi(s_pub) : g_config.pub_interval;
     bool     cover  = s_cover[0] ? (atoi(s_cover) != 0) : g_config.cover_open_extends;
 
+    bool cover_changed = (cover != g_config.cover_open_extends);
+
     remote &= 0xFFFFFF;
     if (remote == 0) remote = g_config.remote_addr;
     /* Output-capable GPIOs on the classic ESP32 stop at 33 */
@@ -564,7 +567,18 @@ static esp_err_t config_somfy_post(httpd_req_t *req)
      * sending, which is exactly the mismatch that makes pairing confusing. */
     somfy_rts_set_remote_addr(remote);
 
-    return send_ok(req, "Somfy settings saved", "/config");
+    /* Cover type selects the Home Assistant device class, which only ships in
+     * the discovery payload. Without republishing here the setting would appear
+     * to do nothing until the next MQTT reconnect. */
+    if (cover_changed && mqtt_manager_is_connected()) {
+        ESP_LOGI(TAG, "cover type changed — republishing discovery");
+        ha_discovery_publish();
+    }
+
+    return send_ok(req, cover_changed
+                        ? "Saved — Home Assistant updated with the new cover type"
+                        : "Somfy settings saved",
+                   "/config");
 }
 
 static esp_err_t config_rolling_post(httpd_req_t *req)
