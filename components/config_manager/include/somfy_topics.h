@@ -18,6 +18,7 @@
 
 /* ── Added by the ESP-IDF port ────────────────────────────────────────────── */
 #define T_COVER_SET         T_BASE "/cover/set"         /* OPEN|CLOSE|STOP        */
+#define T_COVER_STATE       T_BASE "/cover/state"       /* open|closed, retained  */
 #define T_REBOOT            T_BASE "/control/reboot"
 #define T_OTA_TRIGGER       T_BASE "/ota/trigger"       /* firmware URL           */
 

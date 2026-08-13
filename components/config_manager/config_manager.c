@@ -100,9 +100,10 @@ apply_defaults:
         g_config.tx_gpio = DEF_TX_GPIO;
     }
     if (!cover_set) {
-        /* HA device_class "awning": open = deployed, which on a Somfy remote is
-         * the DOWN button. Flip this on /config if your motor runs the other way. */
-        g_config.cover_open_extends = true;
+        /* Default to shutter semantics: OPEN sends UP, matching the built-in
+         * mdi:window-shutter-open / mdi:window-shutter icons HA gives that
+         * device class. Switch to awning on /config to invert the pair. */
+        g_config.cover_open_extends = false;
     }
 
     ESP_LOGI(TAG, "remote=0x%06lX rolling=%lu tx_gpio=%u host=%s",

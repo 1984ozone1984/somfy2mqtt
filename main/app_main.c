@@ -77,6 +77,18 @@ static void somfy_task(void *arg)
 
         mqtt_publish(T_FEEDBACK, cmd.label, 0, 0);
 
+        /* Reflect the movement in the cover entity. RTS is transmit-only, so
+         * this is assumed state — but publishing it retained means Home
+         * Assistant restores the right state (and therefore the right icon)
+         * after a restart. Driven from here rather than from the cover command
+         * handler so pressing the plain Up/Down buttons moves it too. STOP and
+         * PROG leave the state alone: neither implies a final position. */
+        if (cmd.button == SOMFY_BTN_UP || cmd.button == SOMFY_BTN_DOWN) {
+            bool extending = (cmd.button == SOMFY_BTN_DOWN);
+            bool is_open   = g_config.cover_open_extends ? extending : !extending;
+            mqtt_publish(T_COVER_STATE, is_open ? "open" : "closed", 1, 1);
+        }
+
         char buf[16];
         snprintf(buf, sizeof(buf), "%lu",
                  (unsigned long)somfy_rts_get_rolling_code());

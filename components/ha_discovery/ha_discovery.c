@@ -92,16 +92,28 @@ void ha_discovery_publish(void)
      * ADDED BY THE ESP-IDF PORT
      * ════════════════════════════════════════════════════════════════════════ */
 
-    /* Cover — RTS gives no position feedback, so it is optimistic by nature:
-     * HA assumes the command took effect. Which button "open" maps to follows
-     * the cover_open_extends setting on /config. */
+    /* Cover.
+     *
+     * No "icon" field on purpose: an explicit icon overrides Home Assistant's
+     * state-dependent default, freezing it. Leaving it out lets the device class
+     * supply mdi:window-shutter-open / mdi:window-shutter (shutter) or the
+     * awning icons, switching with the state — the behaviour a template cover
+     * otherwise has to reimplement by hand.
+     *
+     * RTS is transmit-only, so the state is assumed rather than measured; it is
+     * published retained from somfy_task after each move. That beats declaring
+     * the cover optimistic, which would come back "unknown" after every Home
+     * Assistant restart and show the wrong icon until the next command. */
     snprintf(buf, sizeof(buf),
-        "{\"name\":\"Markise\",\"device_class\":\"awning\","
+        "{\"name\":\"Markise\",\"device_class\":\"%s\","
         "\"command_topic\":\"" T_COVER_SET "\","
         "\"payload_open\":\"OPEN\",\"payload_close\":\"CLOSE\","
-        "\"payload_stop\":\"STOP\",\"optimistic\":true,"
+        "\"payload_stop\":\"STOP\","
+        "\"state_topic\":\"" T_COVER_STATE "\","
+        "\"state_open\":\"open\",\"state_closed\":\"closed\","
         AVAIL
-        "\"unique_id\":\"terrasse_markise_cover\"," DEV "}");
+        "\"unique_id\":\"terrasse_markise_cover\"," DEV "}",
+        g_config.cover_open_extends ? "awning" : "shutter");
     pub("homeassistant/cover/terrasse_markise_cover/config", buf);
 
     snprintf(buf, sizeof(buf),

@@ -166,14 +166,15 @@ static esp_err_t root_get(httpd_req_t *req)
         "<tr><th>Remote address</th><td>0x%06lX</td></tr>"
         "<tr><th>Next rolling code</th><td><span class=big>%lu</span></td></tr>"
         "<tr><th>Transmitter GPIO</th><td>%u</td></tr>"
-        "<tr><th>Cover OPEN means</th><td>%s</td></tr>"
+        "<tr><th>Cover type</th><td>%s</td></tr>"
         "</table></div>",
         /* From the transmitter, not the config: this is the address the blind
          * was actually paired against. */
         (unsigned long)somfy_rts_get_remote_addr(),
         (unsigned long)somfy_rts_get_rolling_code(),
         g_config.tx_gpio,
-        g_config.cover_open_extends ? "extend (DOWN)" : "retract (UP)");
+        g_config.cover_open_extends ? "Awning — OPEN extends (DOWN)"
+                                    : "Shutter — OPEN retracts (UP)");
 
     n += snprintf(buf + n, 4096 - n,
         "<div class=box><h2>Network</h2><table>"
@@ -390,16 +391,17 @@ static esp_err_t config_get(httpd_req_t *req)
         "<input type=number name=tx_gpio value='%u' min=0 max=33>"
         "<label>Diagnostics publish interval (s)</label>"
         "<input type=number name=pub_ivl value='%lu' min=5 max=3600>"
-        "<label>Cover OPEN command</label>"
+        "<label>Cover type</label>"
         "<select name=cover_ext>"
-        "<option value=1%s>extends the awning (sends DOWN)</option>"
-        "<option value=0%s>retracts the awning (sends UP)</option>"
+        "<option value=0%s>Shutter &mdash; OPEN retracts (sends UP)</option>"
+        "<option value=1%s>Awning &mdash; OPEN extends (sends DOWN)</option>"
         "</select>"
-        "<p class=hint>Affects the <b>cover</b> entity only &mdash; the Up/Down "
-        "buttons always send their own direction. Home Assistant treats an "
-        "awning as <i>open when deployed</i>, so with the default setting the "
-        "cover card's &#9650; arrow extends the awning and it reports "
-        "<code>open</code> while shading.</p>"
+        "<p class=hint>Sets the Home Assistant device class and the button "
+        "mapping together, so the reported state always agrees with the icon. "
+        "<b>Shutter</b> reports <code>open</code> when retracted and uses the "
+        "window-shutter icons; <b>Awning</b> reports <code>open</code> when "
+        "deployed. Affects the <b>cover</b> entity only &mdash; the Up/Down "
+        "buttons always send their own direction.</p>"
         "<p class=hint>The transmitter GPIO takes effect after a reboot.</p>"
         "<button type=submit>Save Somfy Settings</button>"
         "</form></div>"
@@ -431,8 +433,9 @@ static esp_err_t config_get(httpd_req_t *req)
         (unsigned long)somfy_rts_get_remote_addr(),
         g_config.tx_gpio,
         (unsigned long)g_config.pub_interval,
-        g_config.cover_open_extends ? " selected" : "",
+        /* Order matches the <option> order above: value=0 (shutter) first */
         g_config.cover_open_extends ? "" : " selected",
+        g_config.cover_open_extends ? " selected" : "",
         (unsigned long)somfy_rts_get_rolling_code());
 
     httpd_resp_set_type(req, "text/html");

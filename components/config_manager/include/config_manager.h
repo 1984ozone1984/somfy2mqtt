@@ -22,7 +22,13 @@ typedef struct {
     uint8_t  tx_gpio;           /* 433.42 MHz transmitter data pin, default 15      */
 
     uint32_t pub_interval;      /* diagnostics publish interval (seconds)           */
-    bool     cover_open_extends;/* HA cover: OPEN sends DOWN (extend) when true     */
+
+    /* Cover semantics. Picks a coherent pair of device_class and button mapping:
+     *   false → "shutter": OPEN sends UP   (open = rolled up / retracted)
+     *   true  → "awning":  OPEN sends DOWN (open = deployed / shading)
+     * Both are self-consistent; mixing them would make HA report a state that
+     * contradicts its own icon. */
+    bool     cover_open_extends;
 } somfy_config_t;
 
 extern somfy_config_t g_config;

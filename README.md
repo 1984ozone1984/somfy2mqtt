@@ -89,6 +89,7 @@ the receiver's expectation.
 |-------|-----------|---------|
 | `Terrasse/Markise` | subscribe | `u`, `d`, `s`, `p`, or a raw code like `0x9` |
 | `Terrasse/Markise/cover/set` | subscribe | `OPEN` / `CLOSE` / `STOP` |
+| `Terrasse/Markise/cover/state` | publish, retained | `open` / `closed` |
 | `Terrasse/Markise/control/reboot` | subscribe | any |
 | `Terrasse/Markise/ota/trigger` | subscribe | firmware URL |
 | `Terrasse/Markise/Status` | publish, retained (LWT) | `online` / `offline` |
@@ -106,19 +107,27 @@ change it there if you want a different tree.
 
 ### About the cover entity
 
-Home Assistant's `awning` device class treats *open* as **deployed**, so `OPEN`
-sends the remote's DOWN button by default. The practical consequence is that on
-the cover card the **▲ arrow extends the awning** and it reports `open` while
-it is shading. That looks backwards but is the semantics automations and the
-awning icon expect.
+**Cover type** on the Settings page sets the Home Assistant device class and the
+button mapping as a matched pair, so the reported state always agrees with the
+icon:
 
-**Cover OPEN command** on the Settings page flips the mapping if your motor runs
-the other way round — but note that flipping it purely to make the arrows match
-the physical direction will also make Home Assistant report a deployed awning as
-`closed`, which inverts every state check.
+| Setting | device_class | OPEN sends | Reports `open` when | Icons |
+|---------|--------------|-----------|---------------------|-------|
+| Shutter (default) | `shutter` | UP | retracted | `mdi:window-shutter-open` / `mdi:window-shutter` |
+| Awning | `awning` | DOWN | deployed | awning icons |
 
-The setting affects the cover entity only. The Up/Down/Stop/Prog button entities
-always send their own direction regardless.
+The discovery payload deliberately carries **no `icon` field**. An explicit icon
+overrides Home Assistant's state-dependent default and freezes it, so leaving it
+out is what makes the icon follow the state automatically — the thing a template
+cover otherwise has to reimplement with a Jinja template.
+
+RTS is transmit-only, so there is no position feedback. The firmware publishes
+the assumed state to `Terrasse/Markise/cover/state` retained after each move,
+which keeps the cover correct across Home Assistant restarts. A `STOP` leaves the
+state untouched, since it implies no final position.
+
+The setting affects the cover entity only — the Up/Down/Stop/Prog button entities
+always send their own direction.
 
 ## Architecture
 
