@@ -241,3 +241,20 @@ uint32_t somfy_rts_get_rolling_code(void)
 {
     return g_config.rolling_code;
 }
+
+uint32_t somfy_rts_get_remote_addr(void)
+{
+    return s_remote;
+}
+
+void somfy_rts_set_remote_addr(uint32_t remote_addr)
+{
+    /* Take the lock so the address cannot change midway through a command —
+     * the three frames of one transmission must all carry the same address. */
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    s_remote = remote_addr & 0xFFFFFF;
+    xSemaphoreGive(s_lock);
+
+    ESP_LOGW(TAG, "remote address changed to 0x%06lX — re-pair the blind",
+             (unsigned long)s_remote);
+}

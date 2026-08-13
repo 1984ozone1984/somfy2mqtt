@@ -44,6 +44,10 @@ static const char CSS[] =
     "button:hover{background:#1558b0;}"
     "button.r{background:#d93025;} button.r:hover{background:#b52a1e;}"
     "button.big{font-size:1.3em;padding:18px 10px;width:100%;margin:6px 0;}"
+    /* Transient states for the RTS buttons — set by JS, cleared on a timer */
+    "button.busy,button.busy:hover{background:#e8a000;}"
+    "button.done,button.done:hover{background:#188038;}"
+    "button.fail,button.fail:hover{background:#d93025;}"
     "nav a{display:inline-block;margin:0 8px 12px 0;padding:8px 14px;"
           "background:#1a73e8;color:#fff;text-decoration:none;border-radius:4px;}"
     "nav a:hover{background:#1558b0;}"
@@ -164,7 +168,9 @@ static esp_err_t root_get(httpd_req_t *req)
         "<tr><th>Transmitter GPIO</th><td>%u</td></tr>"
         "<tr><th>Cover OPEN means</th><td>%s</td></tr>"
         "</table></div>",
-        (unsigned long)g_config.remote_addr,
+        /* From the transmitter, not the config: this is the address the blind
+         * was actually paired against. */
+        (unsigned long)somfy_rts_get_remote_addr(),
         (unsigned long)somfy_rts_get_rolling_code(),
         g_config.tx_gpio,
         g_config.cover_open_extends ? "extend (DOWN)" : "retract (UP)");
@@ -223,10 +229,13 @@ static esp_err_t root_get(httpd_req_t *req)
 
 static esp_err_t control_get(httpd_req_t *req)
 {
-    char *buf = malloc(3072);
+    /* CSS ~1.6 kB + markup ~1.5 kB + the inline script ~0.9 kB */
+    enum { CONTROL_PAGE_SZ = 6144 };
+
+    char *buf = malloc(CONTROL_PAGE_SZ);
     if (!buf) { httpd_resp_send_500(req); return ESP_FAIL; }
 
-    snprintf(buf, 3072,
+    snprintf(buf, CONTROL_PAGE_SZ,
         "<!DOCTYPE html><html><head><meta charset=UTF-8>"
         "<meta name=viewport content='width=device-width,initial-scale=1'>"
         "<title>Markise Control</title><style>%s</style></head><body>"
@@ -234,34 +243,53 @@ static esp_err_t control_get(httpd_req_t *req)
         NAV
 
         "<div class=box><h2>Move</h2>"
-        "<form method=POST action=/control/cmd>"
-        "<button class=big type=submit name=btn value=u>&#9650;&nbsp; Up (retract)</button>"
-        "</form>"
-        "<form method=POST action=/control/cmd>"
-        "<button class=big type=submit name=btn value=s>&#9632;&nbsp; Stop</button>"
-        "</form>"
-        "<form method=POST action=/control/cmd>"
-        "<button class=big type=submit name=btn value=d>&#9660;&nbsp; Down (extend)</button>"
-        "</form>"
+        "<button type=button class=big onclick=\"cmd('u',this)\">&#9650;&nbsp; Up (retract)</button>"
+        "<button type=button class=big onclick=\"cmd('s',this)\">&#9632;&nbsp; Stop</button>"
+        "<button type=button class=big onclick=\"cmd('d',this)\">&#9660;&nbsp; Down (extend)</button>"
         "</div>"
 
         "<div class=box><h2>Pairing</h2>"
         "<p class=hint>Long-press the PROG button on your real remote until the "
         "blind jogs, then press this within a few seconds to pair this emulated "
-        "remote (address 0x%06lX).</p>"
-        "<form method=POST action=/control/cmd>"
-        "<button type=submit name=btn value=p>Send PROG</button>"
-        "</form></div>"
+        "remote (address <b>0x%06lX</b>).</p>"
+        "<button type=button onclick=\"cmd('p',this)\">Send PROG</button>"
+        "</div>"
 
         "<div class=box><h2>Rolling code</h2>"
-        "<p class=hint>Next code to be sent: <b>%lu</b>. The blind only accepts "
-        "codes ahead of the last one it saw &mdash; if commands stop working, "
-        "raise it on the <a href='/config'>Settings</a> page or re-pair.</p>"
+        "<p class=hint>Next code to be sent: <b id=rc>%lu</b>. The blind only "
+        "accepts codes ahead of the last one it saw &mdash; if commands stop "
+        "working, raise it on the <a href='/config'>Settings</a> page or "
+        "re-pair.</p>"
         "</div>"
+
+        /* Commands go out over fetch() so the page never navigates away; the
+         * button colour is the only feedback, and it is disabled meanwhile so a
+         * double-press cannot queue a second command mid-transmission. */
+        "<script>"
+        "function cmd(b,el){"
+          "var t=el.className;"
+          "el.className=t+' busy';el.disabled=true;"
+          "fetch('/control/cmd',{method:'POST',"
+            "headers:{'Content-Type':'application/x-www-form-urlencoded'},"
+            "body:'btn='+b})"
+          ".then(function(r){"
+            "el.className=t+(r.ok?' done':' fail');"
+            "if(r.ok)setTimeout(rc,1500);"
+          "})"
+          ".catch(function(){el.className=t+' fail';})"
+          ".then(function(){setTimeout(function(){"
+            "el.className=t;el.disabled=false;},1500);});"
+        "}"
+        "function rc(){"
+          "fetch('/control/rc').then(function(r){return r.text();})"
+          ".then(function(t){document.getElementById('rc').textContent=t;})"
+          ".catch(function(){});"
+        "}"
+        "</script>"
 
         "</body></html>",
         CSS,
-        (unsigned long)g_config.remote_addr,
+        (unsigned long)somfy_rts_get_remote_addr(),
         (unsigned long)somfy_rts_get_rolling_code());
 
     httpd_resp_set_type(req, "text/html");
@@ -283,9 +311,26 @@ static esp_err_t control_cmd_post(httpd_req_t *req)
         case 'd': somfy_enqueue_command(SOMFY_BTN_DOWN, "down"); break;
         case 's': somfy_enqueue_command(SOMFY_BTN_STOP, "stop"); break;
         case 'p': somfy_enqueue_command(SOMFY_BTN_PROG, "prog"); break;
-        default:  return send_ok(req, "Unknown command", "/control");
+        default:
+            httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Unknown command");
+            return ESP_FAIL;
     }
-    return send_ok(req, "Command queued", "/control");
+
+    /* Answered by fetch(), not a browser navigation — plain text keeps it small
+     * and lets the JS distinguish success from failure by status alone. */
+    httpd_resp_set_type(req, "text/plain");
+    httpd_resp_sendstr(req, "queued");
+    return ESP_OK;
+}
+
+/* Current rolling code as bare text, polled by the control page after a send */
+static esp_err_t control_rc_get(httpd_req_t *req)
+{
+    char buf[16];
+    snprintf(buf, sizeof(buf), "%lu", (unsigned long)somfy_rts_get_rolling_code());
+    httpd_resp_set_type(req, "text/plain");
+    httpd_resp_sendstr(req, buf);
+    return ESP_OK;
 }
 
 /* ── GET /config ──────────────────────────────────────────────────────────── */
@@ -334,9 +379,10 @@ static esp_err_t config_get(httpd_req_t *req)
         "<div class=box><h2>Somfy RTS</h2>"
         "<form method=POST action=/config/somfy>"
         "<label>Remote address (hex, 24 bit)</label>"
-        "<input type=text name=remote value='%06lX' maxlength=6>"
-        "<p class=hint>Changing this makes the blind ignore the device until it "
-        "is paired again. Default 121309.</p>"
+        "<input type=text name=remote value='%06lX' maxlength=8>"
+        "<p class=hint>Six hex digits, with or without a leading <code>0x</code>. "
+        "Takes effect immediately &mdash; the blind will ignore the device until "
+        "you pair it again from the Control page. Default 121309.</p>"
         "<label>Transmitter GPIO</label>"
         "<input type=number name=tx_gpio value='%u' min=0 max=33>"
         "<label>Diagnostics publish interval (s)</label>"
@@ -346,7 +392,7 @@ static esp_err_t config_get(httpd_req_t *req)
         "<option value=1%s>extends the awning (sends DOWN)</option>"
         "<option value=0%s>retracts the awning (sends UP)</option>"
         "</select>"
-        "<p class=hint>GPIO and remote address take effect after reboot.</p>"
+        "<p class=hint>The transmitter GPIO takes effect after a reboot.</p>"
         "<button type=submit>Save Somfy Settings</button>"
         "</form></div>"
 
@@ -374,7 +420,7 @@ static esp_err_t config_get(httpd_req_t *req)
         g_config.wifi_ssid,
         g_config.mqtt_url,
         g_config.mqtt_user,
-        (unsigned long)g_config.remote_addr,
+        (unsigned long)somfy_rts_get_remote_addr(),
         g_config.tx_gpio,
         (unsigned long)g_config.pub_interval,
         g_config.cover_open_extends ? " selected" : "",
@@ -478,9 +524,18 @@ static esp_err_t config_somfy_post(httpd_req_t *req)
     if (pub < 5)    pub = 5;
     if (pub > 3600) pub = 3600;
 
-    config_manager_save_somfy(remote, gpio, pub, cover);
-    return send_ok(req, "Somfy settings saved — reboot to apply GPIO/address",
-                   "/config");
+    esp_err_t err = config_manager_save_somfy(remote, gpio, pub, cover);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "saving somfy config failed: %s", esp_err_to_name(err));
+        return send_ok(req, "Save failed — settings unchanged", "/config");
+    }
+
+    /* Push the address into the transmitter straight away. Deferring it to a
+     * reboot would leave the pages showing an address the radio is not actually
+     * sending, which is exactly the mismatch that makes pairing confusing. */
+    somfy_rts_set_remote_addr(remote);
+
+    return send_ok(req, "Somfy settings saved", "/config");
 }
 
 static esp_err_t config_rolling_post(httpd_req_t *req)
@@ -707,6 +762,7 @@ esp_err_t config_server_start(void)
         { .uri = "/",                .method = HTTP_GET,  .handler = root_get             },
         { .uri = "/control",         .method = HTTP_GET,  .handler = control_get          },
         { .uri = "/control/cmd",     .method = HTTP_POST, .handler = control_cmd_post     },
+        { .uri = "/control/rc",      .method = HTTP_GET,  .handler = control_rc_get       },
         { .uri = "/config",          .method = HTTP_GET,  .handler = config_get           },
         { .uri = "/config/hostname", .method = HTTP_POST, .handler = config_hostname_post },
         { .uri = "/config/wifi",     .method = HTTP_POST, .handler = config_wifi_post     },

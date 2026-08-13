@@ -23,3 +23,16 @@ esp_err_t somfy_rts_send(uint8_t button);
 
 /** Rolling code that will be used by the *next* transmission. */
 uint32_t somfy_rts_get_rolling_code(void);
+
+/**
+ * The address actually being transmitted right now. This is the authoritative
+ * value to display: it is what the blind was paired against, which is not
+ * necessarily what is sitting in the config form.
+ */
+uint32_t somfy_rts_get_remote_addr(void);
+
+/**
+ * Change the emulated remote address, taking effect on the next transmission.
+ * The blind will ignore the device until it is paired again at the new address.
+ */
+void somfy_rts_set_remote_addr(uint32_t remote_addr);
