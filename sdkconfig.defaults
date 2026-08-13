@@ -1,0 +1,21 @@
+CONFIG_IDF_TARGET="esp32"
+
+# Wemos D1 mini32 — 4 MB flash, two 1.9 MB OTA slots (see partitions.csv)
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="4MB"
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# Task watchdog watches status_task; a wedged loop panics and resets
+CONFIG_ESP_TASK_WDT_TIMEOUT_S=30
+CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0=n
+
+# MQTT: drop publishes while offline instead of growing the outbox
+CONFIG_MQTT_SKIP_PUBLISH_IF_DISCONNECTED=y
+# HA discovery payloads are ~700 B — the 1 kB default leaves no headroom
+CONFIG_MQTT_BUFFER_SIZE=2048
+
+# OTA pulled from a plain HTTP URL (local web server / HA)
+CONFIG_ESP_HTTPS_OTA_ALLOW_HTTP=y
+
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y
