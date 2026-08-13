@@ -410,6 +410,15 @@ static esp_err_t config_get(httpd_req_t *req)
         "<input type=number name=tx_gpio value='%u' min=0 max=33>"
         "<label>Diagnostics publish interval (s)</label>"
         "<input type=number name=pub_ivl value='%lu' min=5 max=3600>"
+        "<p class=hint>The transmitter GPIO takes effect after a reboot.</p>"
+        "<button type=submit>Save Somfy Settings</button>"
+        "</form></div>"
+
+        /* Its own box: buried at the foot of the Somfy form behind two hint
+         * paragraphs, this control was effectively invisible. Posts to the same
+         * handler, which keeps any field that is absent from the body. */
+        "<div class=box><h2>Home Assistant Cover</h2>"
+        "<form method=POST action=/config/somfy>"
         "<label>Cover type</label>"
         "<select name=cover_ext>"
         "<option value=0%s>Shutter &mdash; OPEN retracts (sends UP)</option>"
@@ -417,12 +426,12 @@ static esp_err_t config_get(httpd_req_t *req)
         "</select>"
         "<p class=hint>Sets the Home Assistant device class and the button "
         "mapping together, so the reported state always agrees with the icon. "
-        "<b>Shutter</b> reports <code>open</code> when retracted and uses the "
+        "<b>Shutter</b> reports <code>open</code> when retracted and gets the "
         "window-shutter icons; <b>Awning</b> reports <code>open</code> when "
-        "deployed. Affects the <b>cover</b> entity only &mdash; the Up/Down "
+        "deployed and gets the generic cover icon. Saving republishes discovery "
+        "immediately. Affects the <b>cover</b> entity only &mdash; the Up/Down "
         "buttons always send their own direction.</p>"
-        "<p class=hint>The transmitter GPIO takes effect after a reboot.</p>"
-        "<button type=submit>Save Somfy Settings</button>"
+        "<button type=submit>Save Cover Type</button>"
         "</form></div>"
 
         "<div class=box style='border-left:4px solid #e8a000'>"
