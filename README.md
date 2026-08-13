@@ -107,14 +107,9 @@ change it there if you want a different tree.
 
 ### About the cover entity
 
-**Cover type** on the Settings page sets the Home Assistant device class and the
-button mapping as a matched pair, so the reported state always agrees with the
-icon:
-
-| Setting | device_class | OPEN sends | Reports `open` when | Icons |
-|---------|--------------|-----------|---------------------|-------|
-| Shutter (default) | `shutter` | UP | retracted | `mdi:window-shutter-open` / `mdi:window-shutter` |
-| Awning | `awning` | DOWN | deployed | awning icons |
+The cover is published as `device_class: shutter`: `OPEN` sends UP and reports
+`open` when retracted, matching the `mdi:window-shutter-open` /
+`mdi:window-shutter` icon pair Home Assistant supplies for that class.
 
 The discovery payload deliberately carries **no `icon` field**. An explicit icon
 overrides Home Assistant's state-dependent default and freezes it, so leaving it
@@ -123,11 +118,15 @@ cover otherwise has to reimplement with a Jinja template.
 
 RTS is transmit-only, so there is no position feedback. The firmware publishes
 the assumed state to `Terrasse/Markise/cover/state` retained after each move,
-which keeps the cover correct across Home Assistant restarts. A `STOP` leaves the
+which keeps the icon correct across Home Assistant restarts. A `STOP` leaves the
 state untouched, since it implies no final position.
 
-The setting affects the cover entity only — the Up/Down/Stop/Prog button entities
-always send their own direction.
+`optimistic: true` is set **alongside** the state topic, and is load-bearing. It
+sets `assumed_state`, which stops Home Assistant greying out whichever arrow it
+believes is redundant. Without it, HA disables ▼ whenever it thinks the cover is
+already closed — and since that is only ever an assumption about a device that
+cannot be queried, a wrong guess leaves you with a dead button and no way to
+correct it from the UI.
 
 ## Architecture
 

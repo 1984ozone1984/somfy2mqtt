@@ -100,20 +100,26 @@ void ha_discovery_publish(void)
      * awning icons, switching with the state — the behaviour a template cover
      * otherwise has to reimplement by hand.
      *
-     * RTS is transmit-only, so the state is assumed rather than measured; it is
-     * published retained from somfy_task after each move. That beats declaring
-     * the cover optimistic, which would come back "unknown" after every Home
-     * Assistant restart and show the wrong icon until the next command. */
+     * RTS is transmit-only, so the state is assumed rather than measured. It is
+     * published retained from somfy_task after each move, which keeps the icon
+     * right across a Home Assistant restart.
+     *
+     * "optimistic":true on top of a state topic is deliberate and load-bearing.
+     * It sets assumed_state, which stops Home Assistant greying out the button
+     * it thinks is redundant — without it, HA disables ▼ whenever it believes
+     * the cover is already closed, and since that belief is only ever an
+     * assumption, a wrong one leaves the user with a dead control and no way to
+     * correct it. With assumed_state both arrows stay live at all times. */
     snprintf(buf, sizeof(buf),
-        "{\"name\":\"Markise\",\"device_class\":\"%s\","
+        "{\"name\":\"Markise\",\"device_class\":\"shutter\","
         "\"command_topic\":\"" T_COVER_SET "\","
         "\"payload_open\":\"OPEN\",\"payload_close\":\"CLOSE\","
         "\"payload_stop\":\"STOP\","
         "\"state_topic\":\"" T_COVER_STATE "\","
         "\"state_open\":\"open\",\"state_closed\":\"closed\","
+        "\"optimistic\":true,"
         AVAIL
-        "\"unique_id\":\"terrasse_markise_cover\"," DEV "}",
-        g_config.cover_open_extends ? "awning" : "shutter");
+        "\"unique_id\":\"terrasse_markise_cover\"," DEV "}");
     pub("homeassistant/cover/terrasse_markise_cover/config", buf);
 
     snprintf(buf, sizeof(buf),

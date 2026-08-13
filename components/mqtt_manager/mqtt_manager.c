@@ -53,15 +53,11 @@ static void handle_command_payload(const char *payload)
 
 static void handle_cover_payload(const char *payload)
 {
-    /* HA device_class "awning": OPEN means deployed, which on the remote is the
-     * DOWN button — unless the motor is wired the other way (see /config). */
-    uint8_t open_btn  = g_config.cover_open_extends ? SOMFY_BTN_DOWN : SOMFY_BTN_UP;
-    uint8_t close_btn = g_config.cover_open_extends ? SOMFY_BTN_UP   : SOMFY_BTN_DOWN;
-
+    /* device_class "shutter": open = rolled up, so OPEN is the UP button. */
     if (strcmp(payload, "OPEN") == 0) {
-        somfy_enqueue_command(open_btn, open_btn == SOMFY_BTN_DOWN ? "down" : "up");
+        somfy_enqueue_command(SOMFY_BTN_UP, "up");
     } else if (strcmp(payload, "CLOSE") == 0) {
-        somfy_enqueue_command(close_btn, close_btn == SOMFY_BTN_UP ? "up" : "down");
+        somfy_enqueue_command(SOMFY_BTN_DOWN, "down");
     } else if (strcmp(payload, "STOP") == 0) {
         somfy_enqueue_command(SOMFY_BTN_STOP, "stop");
     } else {

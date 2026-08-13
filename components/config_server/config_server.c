@@ -183,15 +183,13 @@ static esp_err_t root_get(httpd_req_t *req)
         "<tr><th>Last paired with</th><td>%s</td></tr>"
         "<tr><th>Next rolling code</th><td><span class=big>%lu</span></td></tr>"
         "<tr><th>Transmitter GPIO</th><td>%u</td></tr>"
-        "<tr><th>Cover type</th><td>%s</td></tr>"
+        "<tr><th>HA cover</th><td>Shutter &mdash; OPEN sends UP</td></tr>"
         "</table></div>",
         /* From the transmitter, not the config, so it is what actually goes out */
         (unsigned long)somfy_rts_get_remote_addr(),
         paired,
         (unsigned long)somfy_rts_get_rolling_code(),
-        g_config.tx_gpio,
-        g_config.cover_open_extends ? "Awning — OPEN extends (DOWN)"
-                                    : "Shutter — OPEN retracts (UP)");
+        g_config.tx_gpio);
 
     n += snprintf(buf + n, 4096 - n,
         "<div class=box><h2>Network</h2><table>"
@@ -414,25 +412,6 @@ static esp_err_t config_get(httpd_req_t *req)
         "<button type=submit>Save Somfy Settings</button>"
         "</form></div>"
 
-        /* Its own box: buried at the foot of the Somfy form behind two hint
-         * paragraphs, this control was effectively invisible. Posts to the same
-         * handler, which keeps any field that is absent from the body. */
-        "<div class=box><h2>Home Assistant Cover</h2>"
-        "<form method=POST action=/config/somfy>"
-        "<label>Cover type</label>"
-        "<select name=cover_ext>"
-        "<option value=0%s>Shutter &mdash; OPEN retracts (sends UP)</option>"
-        "<option value=1%s>Awning &mdash; OPEN extends (sends DOWN)</option>"
-        "</select>"
-        "<p class=hint>Sets the Home Assistant device class and the button "
-        "mapping together, so the reported state always agrees with the icon. "
-        "<b>Shutter</b> reports <code>open</code> when retracted and gets the "
-        "window-shutter icons; <b>Awning</b> reports <code>open</code> when "
-        "deployed and gets the generic cover icon. Saving republishes discovery "
-        "immediately. Affects the <b>cover</b> entity only &mdash; the Up/Down "
-        "buttons always send their own direction.</p>"
-        "<button type=submit>Save Cover Type</button>"
-        "</form></div>"
 
         "<div class=box style='border-left:4px solid #e8a000'>"
         "<h2>Rolling code</h2>"
@@ -461,9 +440,6 @@ static esp_err_t config_get(httpd_req_t *req)
         (unsigned long)somfy_rts_get_remote_addr(),
         g_config.tx_gpio,
         (unsigned long)g_config.pub_interval,
-        /* Order matches the <option> order above: value=0 (shutter) first */
-        g_config.cover_open_extends ? "" : " selected",
-        g_config.cover_open_extends ? " selected" : "",
         (unsigned long)somfy_rts_get_rolling_code());
 
     httpd_resp_set_type(req, "text/html");
@@ -544,19 +520,15 @@ static esp_err_t config_somfy_post(httpd_req_t *req)
     char body[256];
     read_body(req, body, sizeof(body));
 
-    char s_remote[16] = {0}, s_gpio[8] = {0}, s_pub[8] = {0}, s_cover[8] = {0};
+    char s_remote[16] = {0}, s_gpio[8] = {0}, s_pub[8] = {0};
     get_field(body, "remote",    s_remote, sizeof(s_remote));
     get_field(body, "tx_gpio",   s_gpio,   sizeof(s_gpio));
     get_field(body, "pub_ivl",   s_pub,    sizeof(s_pub));
-    get_field(body, "cover_ext", s_cover,  sizeof(s_cover));
 
     uint32_t remote = s_remote[0] ? (uint32_t)strtoul(s_remote, NULL, 16)
                                   : g_config.remote_addr;
     uint8_t  gpio   = s_gpio[0] ? (uint8_t)atoi(s_gpio) : g_config.tx_gpio;
     uint32_t pub    = s_pub[0]  ? (uint32_t)atoi(s_pub) : g_config.pub_interval;
-    bool     cover  = s_cover[0] ? (atoi(s_cover) != 0) : g_config.cover_open_extends;
-
-    bool cover_changed = (cover != g_config.cover_open_extends);
 
     remote &= 0xFFFFFF;
     if (remote == 0) remote = g_config.remote_addr;
@@ -565,7 +537,7 @@ static esp_err_t config_somfy_post(httpd_req_t *req)
     if (pub < 5)    pub = 5;
     if (pub > 3600) pub = 3600;
 
-    esp_err_t err = config_manager_save_somfy(remote, gpio, pub, cover);
+    esp_err_t err = config_manager_save_somfy(remote, gpio, pub);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "saving somfy config failed: %s", esp_err_to_name(err));
         return send_ok(req, "Save failed — settings unchanged", "/config");
@@ -576,18 +548,8 @@ static esp_err_t config_somfy_post(httpd_req_t *req)
      * sending, which is exactly the mismatch that makes pairing confusing. */
     somfy_rts_set_remote_addr(remote);
 
-    /* Cover type selects the Home Assistant device class, which only ships in
-     * the discovery payload. Without republishing here the setting would appear
-     * to do nothing until the next MQTT reconnect. */
-    if (cover_changed && mqtt_manager_is_connected()) {
-        ESP_LOGI(TAG, "cover type changed — republishing discovery");
-        ha_discovery_publish();
-    }
 
-    return send_ok(req, cover_changed
-                        ? "Saved — Home Assistant updated with the new cover type"
-                        : "Somfy settings saved",
-                   "/config");
+    return send_ok(req, "Somfy settings saved", "/config");
 }
 
 static esp_err_t config_rolling_post(httpd_req_t *req)

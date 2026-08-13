@@ -49,7 +49,7 @@ static bool load_u8(nvs_handle_t nvs, const char *key, uint8_t *dest)
 
 void config_manager_init(void)
 {
-    bool tx_gpio_set = false, cover_set = false;
+    bool tx_gpio_set = false;
 
     nvs_handle_t nvs;
     esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &nvs);
@@ -72,13 +72,6 @@ void config_manager_init(void)
     load_u32(nvs, "pub_ivl",     &g_config.pub_interval);
     tx_gpio_set = load_u8(nvs, "tx_gpio", &g_config.tx_gpio);
 
-    {
-        uint8_t val;
-        if (load_u8(nvs, "cover_ext", &val)) {
-            g_config.cover_open_extends = (val != 0);
-            cover_set = true;
-        }
-    }
 
     nvs_close(nvs);
 
@@ -99,12 +92,6 @@ apply_defaults:
     }
     if (!tx_gpio_set) {
         g_config.tx_gpio = DEF_TX_GPIO;
-    }
-    if (!cover_set) {
-        /* Default to shutter semantics: OPEN sends UP, matching the built-in
-         * mdi:window-shutter-open / mdi:window-shutter icons HA gives that
-         * device class. Switch to awning on /config to invert the pair. */
-        g_config.cover_open_extends = false;
     }
 
     ESP_LOGI(TAG, "remote=0x%06lX rolling=%lu tx_gpio=%u host=%s",
@@ -173,7 +160,7 @@ esp_err_t config_manager_save_mqtt(const char *url, const char *user, const char
 }
 
 esp_err_t config_manager_save_somfy(uint32_t remote_addr, uint8_t tx_gpio,
-                                    uint32_t pub_interval, bool cover_open_extends)
+                                    uint32_t pub_interval)
 {
     nvs_handle_t nvs;
     esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &nvs);
@@ -182,7 +169,6 @@ esp_err_t config_manager_save_somfy(uint32_t remote_addr, uint8_t tx_gpio,
     nvs_set_u32(nvs, "remote_addr", remote_addr);
     nvs_set_u8 (nvs, "tx_gpio",     tx_gpio);
     nvs_set_u32(nvs, "pub_ivl",     pub_interval);
-    nvs_set_u8 (nvs, "cover_ext",   cover_open_extends ? 1 : 0);
     err = nvs_commit(nvs);
     nvs_close(nvs);
 
@@ -190,7 +176,6 @@ esp_err_t config_manager_save_somfy(uint32_t remote_addr, uint8_t tx_gpio,
         g_config.remote_addr        = remote_addr;
         g_config.tx_gpio            = tx_gpio;
         g_config.pub_interval       = pub_interval;
-        g_config.cover_open_extends = cover_open_extends;
         ESP_LOGI(TAG, "somfy config saved: remote=0x%06lX tx_gpio=%u pub=%lus",
                  (unsigned long)remote_addr, tx_gpio, (unsigned long)pub_interval);
     }

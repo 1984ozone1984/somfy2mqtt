@@ -27,13 +27,6 @@ typedef struct {
     uint32_t paired_addr;
 
     uint32_t pub_interval;      /* diagnostics publish interval (seconds)           */
-
-    /* Cover semantics. Picks a coherent pair of device_class and button mapping:
-     *   false → "shutter": OPEN sends UP   (open = rolled up / retracted)
-     *   true  → "awning":  OPEN sends DOWN (open = deployed / shading)
-     * Both are self-consistent; mixing them would make HA report a state that
-     * contradicts its own icon. */
-    bool     cover_open_extends;
 } somfy_config_t;
 
 extern somfy_config_t g_config;
@@ -43,7 +36,7 @@ esp_err_t config_manager_save_hostname(const char *hostname);
 esp_err_t config_manager_save_wifi(const char *ssid, const char *pass);
 esp_err_t config_manager_save_mqtt(const char *url, const char *user, const char *pass);
 esp_err_t config_manager_save_somfy(uint32_t remote_addr, uint8_t tx_gpio,
-                                    uint32_t pub_interval, bool cover_open_extends);
+                                    uint32_t pub_interval);
 
 /**
  * Persist the rolling code. Called before every transmission, so this is the
